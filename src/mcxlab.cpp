@@ -66,7 +66,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]){
   mxArray    *tmp;
   int        ifield, jstruct;
   int        ncfg, nfields;
-  int        fielddim[4];
+  size_t        fielddim[4];
   int        activedev=0;
   int        errorflag=0;
   int        threadid=0;
@@ -310,7 +310,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]){
 
 void mcx_set_field(const mxArray *root,const mxArray *item,int idx, Config *cfg){
     const char *name=mxGetFieldNameByNumber(root,idx);
-    const int *arraydim;
+    const size_t *arraydim;
     char *jsonshapes=NULL;
     int i,j;
 
