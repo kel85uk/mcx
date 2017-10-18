@@ -356,7 +356,7 @@ void mcx_set_field(const mxArray *root,const mxArray *item,int idx, Config *cfg)
     GET_VEC4_FIELD(cfg,srcparam1)
     GET_VEC4_FIELD(cfg,srcparam2)
     else if(strcmp(name,"vol")==0){
-        int dimxyz;
+        size_t dimxyz;
         cfg->mediabyte=0;
         if(mxIsUint8(item) || mxIsInt8(item))
 	     cfg->mediabyte=1;

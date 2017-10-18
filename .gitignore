@@ -2,3 +2,4 @@ Rakefile
 
 # Ignore build directory
 build
+*.mex*
