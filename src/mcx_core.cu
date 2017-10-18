@@ -679,27 +679,11 @@ kernel void mcx_main_loop(uint media[],float field[],float genergy[],uint n_seed
                            sincosf(tmp0,&sphi,&cphi);
 		       }
                        GPUDEBUG(("scat phi=%f\n",tmp0));
-		       tmp0=(v->nscat > gcfg->gscatter) ? 0.f : prop.g;
+		               tmp0=(v->nscat > gcfg->gscatter) ? 0.f : prop.g;
 
-                       //Henyey-Greenstein Phase Function, "Handbook of Optical 
-                       //Biomedical Diagnostics",2002,Chap3,p234, also see Boas2002
+                       #include "mcx_phase.h"
 
-                       if(tmp0>EPS){  //if prop.g is too small, the distribution of theta is bad
-		           tmp0=(1.f-prop.g*prop.g)/(1.f-prop.g+2.f*prop.g*rand_next_zangle(t));
-		           tmp0*=tmp0;
-		           tmp0=(1.f+prop.g*prop.g-tmp0)/(2.f*prop.g);
-
-                           // when ran=1, CUDA gives me 1.000002 for tmp0 which produces nan later
-                           // detected by Ocelot,thanks to Greg Diamos,see http://bit.ly/cR2NMP
-                           tmp0=fmax(-1.f, fmin(1.f, tmp0));
-
-		           theta=acosf(tmp0);
-		           stheta=sinf(theta);
-		           ctheta=tmp0;
-                       }else{
-			   theta=acosf(2.f*rand_next_zangle(t)-1.f);
-                           sincosf(theta,&stheta,&ctheta);
-                       }
+                       
                        GPUDEBUG(("scat theta=%f\n",theta));
 		       if(gcfg->is2d)
 		           rotatevector2d(v,stheta,ctheta);
