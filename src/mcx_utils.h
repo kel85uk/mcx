@@ -25,6 +25,7 @@
 #define _MCEXTREME_UTILITIES_H
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <vector_types.h>
 #include "br2cu.h"
 #include "cjson/cJSON.h"
@@ -166,6 +167,7 @@ typedef struct MCXConfig{
 	void *seeddata;
         int replaydet;      /**<the detector id for which to replay the detected photons, start from 1*/
         char seedfile[MAX_PATH_LENGTH];
+        char phaseFile[MAX_PATH_LENGTH];
         unsigned int debuglevel; /**<a flag to control the printing of the debug information*/
         char deviceid[MAX_DEVICE];
         float workload[MAX_DEVICE];
@@ -215,6 +217,7 @@ void mcx_cleargpuinfo(GPUInfo **gpuinfo);
 int  mcx_isbinstr(const char * str);
 void mcx_progressbar(float percent, Config *cfg);
 void mcx_flush(Config *cfg);
+void read_phase_file_to_table(float** phase_table, char* phase_filename, int* numLines);
 
 #ifdef MCX_CONTAINER
 #ifdef __cplusplus

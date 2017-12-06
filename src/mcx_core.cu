@@ -1157,6 +1157,7 @@ void mcx_run_simulation(Config *cfg,GPUInfo *gpu){
      uint   *Pseed;
      float  *Pdet;
      RandType *seeddata=NULL;
+     float* phaseTable=NULL;
      uint    detected=0,sharedbuf=0;
 
      volatile int *progress, *gprogress;
@@ -1212,6 +1213,11 @@ void mcx_run_simulation(Config *cfg,GPUInfo *gpu){
      cfg->energyabs=0.f;
      cfg->energyesc=0.f;
      cfg->runtime=0;
+     if(cfg->phaseFile!=NULL) {
+        int numLines = 0;
+        read_phase_file_to_table(&phaseTable, (cfg->phaseFile), &numLines);
+        for (int i = 0; i < numLines; ++i) printf("phaseTable[%d] = %f\n", i, phaseTable[i]);
+     }
 }
 #pragma omp barrier
 
@@ -1470,6 +1476,7 @@ void mcx_run_simulation(Config *cfg,GPUInfo *gpu){
 #ifdef USE_MT_RAND
      sharedbuf+=(N+2)*sizeof(uint); // MT RNG uses N+2 uint in the shared memory
 #endif
+     sharedbuf+=(20000)*sizeof(float);
 
      MCX_FPRINTF(cfg->flog,"requesting %d bytes of shared memory\n",sharedbuf);
 

@@ -146,6 +146,7 @@ void mcx_initcfg(Config *cfg){
      cfg->replay.tof=NULL;
      cfg->replaydet=0;
      cfg->seedfile[0]='\0';
+     cfg->phaseFile[0]='\0';
      cfg->outputtype=otFlux;
      cfg->outputformat=ofMC2;
      cfg->detectedcount=0;
@@ -361,6 +362,32 @@ URL: http://mcx.sf.net/cgi-bin/index.cgi?Doc/FAQ\n");
      }
      exit(id);
 #endif
+}
+
+// This function creates an array and reads the tabular data of the cos(theta) cdf
+void read_phase_file_to_table(float** phase_table, char* phase_filename, int* lines) {
+    *lines = 0;
+    int BUFSIZE = 400000;//max number of lines to read
+    float* buffer_array = (float *) calloc(BUFSIZE, sizeof(float));
+    float read_buffer;
+    printf("Filename = %s \n",phase_filename);
+    FILE *pFile;
+    pFile = fopen(phase_filename,"r");
+    
+    printf("Opening line %d\n",*lines);
+    while ( fscanf(pFile, "%f", &read_buffer) ) {
+        buffer_array[*lines] = read_buffer;
+        printf("%f\n", buffer_array[*lines]);
+        ++(*lines);
+    }
+    printf("Closing file\n");
+    fclose(pFile);
+    // Allocate memory for the phase_table
+    *phase_table = (float*) calloc (*lines, sizeof(float));
+
+    for (int i = 0; i < *lines ; ++i) {
+        (*phase_table)[i] = buffer_array[i];
+    }
 }
 
 /**
@@ -1472,6 +1499,11 @@ void mcx_parsecmd(int argc, char* argv[], Config *cfg){
 		     	        }else
 					i=mcx_readarg(argc,argv,i,&(cfg->seed),"int");
 		     	        break;
+
+                     case 'c':
+                        i = mcx_readarg(argc,argv,i,cfg->phaseFile,"string");
+                        break;
+
                      case 'O':
                                 i=mcx_readarg(argc,argv,i,&(cfg->outputtype),"string");
 				if(mcx_lookupindex(&(cfg->outputtype), outputtype)){
