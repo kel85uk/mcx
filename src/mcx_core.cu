@@ -29,6 +29,10 @@
 #include "tictoc.h"
 #include "mcx_const.h"
 
+#ifdef USE_HALF
+    #include "cuda_fp16.h"
+#endif
+
 #if defined(USE_XORSHIFT128P_RAND)
     #include "xorshift128p_rand.cu" // use xorshift128+ RNG (XORSHIFT128P)
 #elif defined(USE_POSIX_RAND)
@@ -106,18 +110,20 @@ __device__ inline void savecache(float *data,float *cache){
 #endif
 
 #ifdef SAVE_DETECTORS
-__device__ inline uint finddetector(MCXpos *p0,uint id){
-      float4 *gdetpos=gproperty+gcfg->maxmedia+1;
-      if((gdetpos[id].x-p0->x)*(gdetpos[id].x-p0->x)+
-	 (gdetpos[id].y-p0->y)*(gdetpos[id].y-p0->y)+
-	 (gdetpos[id].z-p0->z)*(gdetpos[id].z-p0->z) < gdetpos[id].w*gdetpos[id].w){
-	        return id+1;
+__device__ inline uint finddetector(MCXpos *p0){
+      uint i;
+      for(i=gcfg->maxmedia+1;i<gcfg->maxmedia+gcfg->detnum+1;i++){
+      	if((gproperty[i].x-p0->x)*(gproperty[i].x-p0->x)+
+	   (gproperty[i].y-p0->y)*(gproperty[i].y-p0->y)+
+	   (gproperty[i].z-p0->z)*(gproperty[i].z-p0->z) < gproperty[i].w*gproperty[i].w){
+	        return i-gcfg->maxmedia;
+	   }
       }
       return 0;
 }
 
-__device__ inline void savedetphoton(uint detid,float n_det[],uint *detectedphoton,float nscat,float *ppath,MCXpos *p0,MCXdir *v,RandType t[RAND_BUF_LEN],RandType *seeddata){
-      detid=finddetector(p0,detid-1);
+__device__ inline void savedetphoton(float n_det[],uint *detectedphoton,float nscat,float *ppath,MCXpos *p0,MCXdir *v,RandType t[RAND_BUF_LEN],RandType *seeddata){
+      uint detid=finddetector(p0);
       if(detid){
 	 uint baseaddr=atomicAdd(detectedphoton,1);
 	 if(baseaddr<gcfg->maxdetphoton){
@@ -162,6 +168,8 @@ __device__ inline float mcx_nextafterf(float a, int dir){
       return num.f-gcfg->maxvoidstep;
 }
 
+#ifndef USE_HALF
+
 __device__ inline float hitgrid(float3 *p0, float3 *v, float *htime,float* rv,int *id){
       float dist;
 
@@ -181,12 +189,84 @@ __device__ inline float hitgrid(float3 *p0, float3 *v, float *htime,float* rv,in
 
       int index = (*id & (int)3); 
 
-      if(index == 0) htime[0] = mcx_nextafterf(__float2int_rn(htime[0]), (v->x > 0.f)-(v->x < 0.f));
-      if(index == 1) htime[1] = mcx_nextafterf(__float2int_rn(htime[1]), (v->y > 0.f)-(v->y < 0.f));
-      if(index == 2) htime[2] = mcx_nextafterf(__float2int_rn(htime[2]), (v->z > 0.f)-(v->z < 0.f));
+      if(index == 0) htime[0] = mcx_nextafterf(roundf(htime[0]), (v->x > 0.f)-(v->x < 0.f));
+      if(index == 1) htime[1] = mcx_nextafterf(roundf(htime[1]), (v->y > 0.f)-(v->y < 0.f));
+      if(index == 2) htime[2] = mcx_nextafterf(roundf(htime[2]), (v->z > 0.f)-(v->z < 0.f));
 
       return dist;
 }
+
+#else
+
+__device__ inline half mcx_nextafter_half(const half a, const short dir){
+      union{
+          half f;
+          short i;
+      } num;
+      num.f=a;
+      ((num.i & 0x7FFFU) == 0) ? (num.i = ((dir & 0x8000U) ) | 1) : ((num.i & 0x8000U) ? num.i-= dir: num.i+= dir);
+      return num.f;
+}
+
+__device__ inline float hitgrid(float3 *p0, float3 *v, float *htime,float* rv,int *id){
+      float dist;
+
+      union {
+           unsigned int i;
+           float f;
+           half2 h2;
+           half h[2];
+      } pxy, pzw, vxy, vzw, h1, h2, temp;
+
+      pxy.h2=__floats2half2_rn(floorf(p0->x) - p0->x, floorf(p0->y) - p0->y);
+      pzw.h2=__floats2half2_rn(floorf(p0->z) - p0->z, 1e5f);
+      vxy.h2=__floats2half2_rn(rv[0],rv[1]);
+      vzw.h2=__floats2half2_rn(rv[2],1.f);
+
+      temp.h2 = __floats2half2_rn(0.f, 0.f);
+
+      h1.h2 = __hmul2(__hadd2(pxy.h2,__hgt2(vxy.h2, temp.h2 )), vxy.h2);
+      h2.h2 = __hmul2(__hadd2(pzw.h2,__hgt2(vzw.h2, temp.h2 )), vzw.h2);
+
+      // abs
+      h1.i &= 0x7FFF7FFF;
+      h2.i &= 0x7FFF7FFF;
+
+      temp.h[0]=(__hlt(h1.h[0], h1.h[1]))   ? (*id=0,h1.h[0])  : (*id=1,h1.h[1]);
+      temp.h[1]=(__hlt(temp.h[0], h2.h[0])) ?    temp.h[0]     : (*id=2,h2.h[0]);
+
+      dist=__half2float(temp.h[1]);
+
+      //p0 is inside, p is outside, move to the 1st intersection pt, now in the air side, to be corrected in the else block
+      vxy.h2=__floats2half2_rn(v->x,v->y);
+      vzw.h2=__floats2half2_rn(v->z,0.f);
+
+      pxy.h2=__floats2half2_rn(p0->x, p0->y);
+      pzw.h2=__floats2half2_rn(p0->z, 0.f);
+
+      h1.h2 =__hfma2(vxy.h2,__floats2half2_rn(dist,dist),pxy.h2);
+      h2.h2 =__hfma2(vzw.h2,__floats2half2_rn(dist,dist),pzw.h2);
+      htime[0]=__half2float(h1.h[0]);
+      htime[1]=__half2float(h1.h[1]);
+      htime[2]=__half2float(h2.h[0]);
+
+      temp.h2 = __floats2half2_rn(0.f, 0.f);
+      pxy.h2=__hgt2(vxy.h2, temp.h2 );
+      pzw.h2=__hlt2(vxy.h2, temp.h2 );
+      pxy.h2=__hsub2(pxy.h2, pzw.h2 );
+
+      pzw.h2=__hlt2(vzw.h2, temp.h2 );
+      temp.h2=__hgt2(vzw.h2, temp.h2 );
+      pzw.h2=__hsub2(temp.h2,pzw.h2 );
+
+      if((*id) == 0) htime[0] = __half2float(mcx_nextafter_half(hrint(h1.h[0]), __half2short_rn(pxy.h[0])));
+      if((*id) == 1) htime[1] = __half2float(mcx_nextafter_half(hrint(h1.h[1]), __half2short_rn(pxy.h[1])));
+      if((*id) == 2) htime[2] = __half2float(mcx_nextafter_half(hrint(h2.h[0]), __half2short_rn(pzw.h[0])));
+
+      return dist;
+}
+
+#endif
 
 __device__ inline void transmit(MCXdir *v, float n1, float n2,int flipdir){
       float tmp0=n1/n2;
@@ -333,7 +413,7 @@ __device__ inline int launchnewphoton(MCXpos *p,MCXdir *v,MCXtime *f,float3* rv,
       // let's handle detectors here
           if(gcfg->savedet){
              if(isdet && *mediaid==0)
-	         savedetphoton((isdet>>16),n_det,dpnum,v->nscat,ppath,p,v,photonseed,seeddata);
+	         savedetphoton(n_det,dpnum,v->nscat,ppath,p,v,photonseed,seeddata);
              clearpath(ppath,gcfg->maxmedia);
           }
 #endif
@@ -1585,9 +1665,7 @@ is more than what your have specified (%d), please use the -H option to specify 
            MCX_FPRINTF(cfg->flog,"normalizing raw data ...\t");
            cfg->energyabs+=cfg->energytot-cfg->energyesc;
            if(cfg->outputtype==otFlux || cfg->outputtype==otFluence){
-               scale=1.f/(cfg->energytot*Vvox*cfg->tstep);
-	       if(cfg->unitinmm!=1.f)
-		   scale*=cfg->unitinmm; /* Vvox (in mm^3 already) * (Tstep) * (Eabsorp/U) */
+               scale=cfg->unitinmm/(cfg->energytot*Vvox*cfg->tstep); /* Vvox (in mm^3 already) * (Tstep) * (Eabsorp/U) */
 
                if(cfg->outputtype==otFluence)
 		   scale*=cfg->tstep;
@@ -1597,6 +1675,7 @@ is more than what your have specified (%d), please use the -H option to specify 
 	       scale=0.f;
 	       for(i=0;i<cfg->nphoton;i++)
 	           scale+=cfg->replay.weight[i];
+	       scale*=cfg->unitinmm;
 	       if(scale>0.f)
 	           scale=1.f/scale;
            }

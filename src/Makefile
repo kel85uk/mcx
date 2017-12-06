@@ -45,10 +45,10 @@ else ifeq ($(BACKEND),cudastatic)
       CUDART=-lcudadevrt -lcudart_static -ldl -lrt -static-libgcc -static-libstdc++
   endif
   LINKOPT=-L/usr/local/cuda/lib -lm $(CUDART)
-  CUCCOPT=-lineinfo -Xcompiler -Wall#-g #-arch compute_20 #--maxrregcount 32
+  CUCCOPT=-g -lineinfo -Xcompiler -Wall#-arch compute_20 #--maxrregcount 32
 else
   LINKOPT=-L/usr/local/cuda/lib -lm $(CUDART)
-  CUCCOPT=-lineinfo -Xcompiler -Wall#-g #-arch compute_20 #--maxrregcount 32
+  CUCCOPT=-g -lineinfo -Xcompiler -Wall#-arch compute_20 #--maxrregcount 32
 endif
 
 DLLFLAG=-fPIC
@@ -133,12 +133,14 @@ detbox mexbox octbox: CUCCOPT+=-DMCX_TARGET_NAME='"Cached Detective MCX"'
 fermi fermimex fermioct: CUCCOPT+=-DMCX_TARGET_NAME='"Fermi MCX"'
 det detbox: BINARY:=$(BINARY)_det
 logbox detbox:          BINARY:=$(BINARY)_cached
-all xorfermi maxwell pascal:    fermi
+all xorfermi maxwell pascal half:    fermi
 maxwell:    CUGENCODE=-arch=compute_20 -code=sm_20 -code=sm_30 -code=sm_35 -code=sm_50 -code=sm_52
 pascal:     CUGENCODE=-arch=compute_20 -code=sm_20 -code=sm_30 -code=sm_35 -code=sm_50 -code=sm_52 -code=sm_61
 xormax:     maxwell
 xorpas:     pascal
 xorfermi xormax xorpas:     CUCCOPT+=-DUSE_XORSHIFT128P_RAND
+half:       CUCCOPT+=-DUSE_HALF
+half:       CUGENCODE=-arch=compute_60
 
 
 static:     xorfermi
@@ -147,7 +149,7 @@ static:     CUOMPLINK=-Xcompiler
 static:     LINKOPT=$(CUDA_STATIC)
 
 mexbox fermimex:        AR=$(MEX)
-mexbox fermimex:        LINKOPT+= CXXFLAGS='$$CXXFLAGS -DSAVE_DETECTORS -DUSE_CACHEBOX -DMCX_CONTAINER $(OMP) $(MEXCCOPT) $(USERCCOPT)' LDFLAGS='-L$$TMW_ROOT$$MATLABROOT/sys/os/$$ARCH $$LDFLAGS $(OMP) $(USERLINKOPT)' -liomp5
+mexbox fermimex:        LINKOPT+= CXXFLAGS='$$CXXFLAGS -g -DSAVE_DETECTORS -DUSE_CACHEBOX -DMCX_CONTAINER $(OMP) $(MEXCCOPT) $(USERCCOPT)' LDFLAGS='-L$$TMW_ROOT$$MATLABROOT/sys/os/$$ARCH $$LDFLAGS $(OMP) $(USERLINKOPT)' -liomp5
 mexbox oct octbox fermimex fermioct:    OUTPUT_DIR=../mcxlab
 fermimex:      BINARY=mcxlab
 fermioct:      BINARY=mcxlab.mex
