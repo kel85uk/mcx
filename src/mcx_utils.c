@@ -375,7 +375,7 @@ void read_phase_file_to_table(float** phase_table, char* phase_filename, int* li
     pFile = fopen(phase_filename,"r");
     
     printf("Opening line %d\n",*lines);
-    while ( fscanf(pFile, "%f", &read_buffer) ) {
+    while ( fscanf(pFile, "%f", &read_buffer) == 1 ) {
         buffer_array[*lines] = read_buffer;
         printf("%f\n", buffer_array[*lines]);
         ++(*lines);
