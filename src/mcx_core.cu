@@ -661,8 +661,9 @@ __device__ void test_device_function(float** input_table)
 }
 
 __device__ void compute_rand_angles( float* theta, float* stheta, float* ctheta,
-                                     float* sphi, float* cphi, 
-                                     Medium *prop, MCXdir **v, RandType (*t)[RAND_BUF_LEN] )
+                                     float* sphi, float* cphi,
+                                     const float** global_phase_table, 
+                                     const Medium *prop, const MCXdir **v, RandType (*t)[RAND_BUF_LEN] )
 {
 
     float tmp0=0.f;
@@ -676,13 +677,22 @@ __device__ void compute_rand_angles( float* theta, float* stheta, float* ctheta,
 
     if(tmp0>EPS) 
     {  //if prop->g is too small, the distribution of theta is bad
-        tmp0=(1.f-prop->g*prop->g)/(1.f-prop->g+2.f*prop->g*rand_next_zangle(*t));
-        tmp0*=tmp0;
-        tmp0=(1.f+prop->g*prop->g-tmp0)/(2.f*prop->g);
 
-        // when ran=1, CUDA gives me 1.000002 for tmp0 which produces nan later
-        // detected by Ocelot,thanks to Greg Diamos,see http://bit.ly/cR2NMP
-        tmp0=fmax(-1.f, fmin(1.f, tmp0));
+        if (gcfg->phaseFile != '\0') // We provide a custom phase function file
+        {
+            tmp0 = (*global_phase_table)[56];
+        }
+        else // Else use Henyey-Greenstein Phase Function, "Handbook of Optical 
+                       //Biomedical Diagnostics",2002,Chap3,p234, also see Boas2002
+        {
+            tmp0=(1.f-prop->g*prop->g)/(1.f-prop->g+2.f*prop->g*rand_next_zangle(*t));
+            tmp0*=tmp0;
+            tmp0=(1.f+prop->g*prop->g-tmp0)/(2.f*prop->g);
+    
+            // when ran=1, CUDA gives me 1.000002 for tmp0 which produces nan later
+            // detected by Ocelot,thanks to Greg Diamos,see http://bit.ly/cR2NMP
+            tmp0=fmax(-1.f, fmin(1.f, tmp0));
+        }
 
         *theta=acosf(tmp0);
         *stheta=sinf(*theta);
@@ -799,7 +809,9 @@ kernel void mcx_main_loop(uint media[],float field[],float genergy[],uint n_seed
 	                     float cphi=1.f,sphi=0.f,theta,stheta,ctheta;
 
                        compute_rand_angles( &theta, &stheta, &ctheta,
-                                            &sphi, &cphi, &prop, &v, &t );
+                                            &sphi, &cphi, 
+                                            &global_phase_table,
+                                            &prop, &v, &t             );
                        
                        GPUDEBUG(("scat theta=%f\n",theta));
 		       if(gcfg->is2d)
@@ -1220,7 +1232,7 @@ void mcx_run_simulation(Config *cfg,GPUInfo *gpu){
 		     cfg->medianum-1,cfg->detnum,0,0,cfg->reseedlimit,ABS(cfg->sradius+2.f)<EPS /*isatomic*/,
 		     (uint)cfg->maxvoidstep,cfg->issaveseed>0,cfg->issaveexit>0,cfg->issaveref>0,
 		     cfg->maxdetphoton*detreclen,cfg->seed,(uint)cfg->outputtype,0,0,cfg->faststep,
-		     cfg->debuglevel,(uint)cfg->maxjumpdebug,cfg->gscatter,is2d};
+		     cfg->debuglevel,(uint)cfg->maxjumpdebug,cfg->gscatter,is2d, cfg->phaseFile[0]};
      if(param.isatomic)
          param.skipradius2=0.f;
 
@@ -1253,9 +1265,8 @@ void mcx_run_simulation(Config *cfg,GPUInfo *gpu){
      cfg->energyabs=0.f;
      cfg->energyesc=0.f;
      cfg->runtime=0;
-     if(cfg->phaseFile!=NULL) {
+     if(cfg->phaseFile[0]!='\0') {
         read_phase_file_to_table(&phaseTable, (cfg->phaseFile), &numLines);
-        // for (int i = 0; i < numLines; ++i) printf("phaseTable[%d] = %f\n", i, phaseTable[i]);
      }
 }
 #pragma omp barrier
@@ -1487,7 +1498,7 @@ void mcx_run_simulation(Config *cfg,GPUInfo *gpu){
      CUDA_ASSERT(cudaMemcpy(gmedia, media, sizeof(uint)*dimxyz, cudaMemcpyHostToDevice));
      CUDA_ASSERT(cudaMemcpy(genergy,energy,sizeof(float) *(gpu[gpuid].autothread<<1), cudaMemcpyHostToDevice));
 
-     if (cfg->phaseFile != NULL)
+     if (cfg->phaseFile[0] != '\0')
      {
         CUDA_ASSERT( cudaMalloc( (void **) &global_phase_table, sizeof(float)*numLines ) );
         CUDA_ASSERT( cudaMemcpy( global_phase_table, phaseTable, 
@@ -1769,7 +1780,7 @@ is more than what your have specified (%d), please use the -H option to specify 
         CUDA_ASSERT(cudaMemcpy(Pseed, gPseed,sizeof(RandType)*cfg->nphoton*RAND_BUF_LEN,   cudaMemcpyDeviceToHost));
      CUDA_ASSERT(cudaMemcpy(energy,genergy,sizeof(float)*(gpu[gpuid].autothread<<1),cudaMemcpyDeviceToHost));
 
-     if(cfg->phaseFile!=NULL){
+     if(cfg->phaseFile[0]!='\0'){
         float *phase_table_output = (float *) calloc(numLines,sizeof(float));
         CUDA_ASSERT( cudaMemcpy( phase_table_output,global_phase_table,
                                  sizeof(float)*numLines,cudaMemcpyDeviceToHost ) );
