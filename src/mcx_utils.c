@@ -370,17 +370,17 @@ void read_phase_file_to_table(float** phase_table, char* phase_filename, int* li
     int BUFSIZE = 400000;//max number of lines to read
     float* buffer_array = (float *) calloc(BUFSIZE, sizeof(float));
     float read_buffer;
-    printf("Filename = %s \n",phase_filename);
+    printf("Phase Function Filename = %s \n",phase_filename);
     FILE *pFile;
     pFile = fopen(phase_filename,"r");
     
-    printf("Opening line %d\n",*lines);
-    while ( fscanf(pFile, "%f", &read_buffer) == 1 ) {
+    // printf("Opening line %d\n",*lines);
+    while ( fscanf(pFile, "%f", &read_buffer) > 0 ) {
         buffer_array[*lines] = read_buffer;
-        printf("%f\n", buffer_array[*lines]);
+        // printf("%f\n", buffer_array[*lines]);
         ++(*lines);
     }
-    printf("Closing file\n");
+    // printf("Closing file\n");
     fclose(pFile);
     // Allocate memory for the phase_table
     *phase_table = (float*) calloc (*lines, sizeof(float));

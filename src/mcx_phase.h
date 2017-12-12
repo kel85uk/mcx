@@ -22,3 +22,5 @@
 			   theta=acosf(2.f*rand_next_zangle(t)-1.f);
                            sincosf(theta,&stheta,&ctheta);
                        }
+
+                       global_phase_table[0] -= rand_next_zangle(t);
