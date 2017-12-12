@@ -652,6 +652,50 @@ kernel void mcx_test_rng(float field[],uint n_seed[]){
      }
 }
 
+// This is a device only function. Used to provide custom phase functions
+__device__ void test_device_function(float** input_table) 
+{
+
+    *(input_table)[0] = 90;
+
+}
+
+__device__ void compute_rand_angles( float* theta, float* stheta, float* ctheta,
+                                     float* sphi, float* cphi, 
+                                     Medium *prop, MCXdir **v, RandType (*t)[RAND_BUF_LEN] )
+{
+
+    float tmp0=0.f;
+    if(!gcfg->is2d){
+        tmp0=TWO_PI*rand_next_aangle(*t); //next azimuth angle
+        sincosf(tmp0,sphi,cphi);
+    }
+    GPUDEBUG(("scat phi=%f\n",tmp0));
+    
+    tmp0=((*v)->nscat > gcfg->gscatter) ? 0.f : prop->g;
+
+    if(tmp0>EPS) 
+    {  //if prop->g is too small, the distribution of theta is bad
+        tmp0=(1.f-prop->g*prop->g)/(1.f-prop->g+2.f*prop->g*rand_next_zangle(*t));
+        tmp0*=tmp0;
+        tmp0=(1.f+prop->g*prop->g-tmp0)/(2.f*prop->g);
+
+        // when ran=1, CUDA gives me 1.000002 for tmp0 which produces nan later
+        // detected by Ocelot,thanks to Greg Diamos,see http://bit.ly/cR2NMP
+        tmp0=fmax(-1.f, fmin(1.f, tmp0));
+
+        *theta=acosf(tmp0);
+        *stheta=sinf(*theta);
+        *ctheta=tmp0;
+    }
+    else
+    {
+        *theta=acosf(2.f*rand_next_zangle(*t)-1.f);
+        sincosf(*theta,stheta,ctheta);
+    }
+
+}
+
 /**
    this is the core Monte Carlo simulation kernel, please see Fig. 1 in Fang2009
    everything in the GPU kernels is in grid-unit. To convert back to length, use
@@ -752,17 +796,10 @@ kernel void mcx_main_loop(uint media[],float field[],float genergy[],uint n_seed
                GPUDEBUG(("scat L=%f RNG=[%0lX %0lX] \n",f.pscat,t[0],t[1]));
 	       if(v->nscat!=EPS){ // if this is not my first jump
                        //random arimuthal angle
-	               float cphi=1.f,sphi=0.f,theta,stheta,ctheta;
-                       float tmp0=0.f;
-		       if(!gcfg->is2d){
-		           tmp0=TWO_PI*rand_next_aangle(t); //next arimuth angle
-                           sincosf(tmp0,&sphi,&cphi);
-		       }
-                       GPUDEBUG(("scat phi=%f\n",tmp0));
-		               tmp0=(v->nscat > gcfg->gscatter) ? 0.f : prop.g;
+	                     float cphi=1.f,sphi=0.f,theta,stheta,ctheta;
 
-                       #include "mcx_phase.h"
-
+                       compute_rand_angles( &theta, &stheta, &ctheta,
+                                            &sphi, &cphi, &prop, &v, &t );
                        
                        GPUDEBUG(("scat theta=%f\n",theta));
 		       if(gcfg->is2d)
