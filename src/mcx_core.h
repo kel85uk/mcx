@@ -1,24 +1,26 @@
-/*******************************************************************************
-**
-**  \mainpage Monte Carlo eXtreme (MCX)  - GPU accelerated 3D Monte Carlo transport simulation
+/***************************************************************************//**
+**  \mainpage Monte Carlo eXtreme - GPU accelerated Monte Carlo Photon Migration
 **
 **  \author Qianqian Fang <q.fang at neu.edu>
+**  \copyright Qianqian Fang, 2009-2018
 **
 **  \section sref Reference:
 **  \li \c (\b Fang2009) Qianqian Fang and David A. Boas, 
 **          <a href="http://www.opticsinfobase.org/abstract.cfm?uri=oe-17-22-20178">
 **          "Monte Carlo Simulation of Photon Migration in 3D Turbid Media Accelerated 
 **          by Graphics Processing Units,"</a> Optics Express, 17(22) 20178-20190 (2009).
-**  
-**  \section slicense License
-**        GNU General Public License v3, see LICENSE.txt for details
+**  \li \c (\b Yu2018) Leiming Yu, Fanny Nina-Paravecino, David Kaeli, and Qianqian Fang,
+**          "Scalable and massively parallel Monte Carlo photon transport
+**           simulations for heterogeneous computing platforms," J. Biomed. Optics, (in press) 2018.
 **
+**  \section slicense License
+**          GPL v3, see LICENSE.txt for details
 *******************************************************************************/
 
 /***************************************************************************//**
 \file    mcx_core.h
 
-\brief   MCX GPU kernel header file
+@brief   MCX GPU kernel header file
 *******************************************************************************/
 
 #ifndef _MCEXTREME_GPU_LAUNCH_H
@@ -33,11 +35,11 @@ extern "C" {
 
 #define ABS(a)  ((a)<0?-(a):(a))
 #define DETINC	32
-#define MCX_DEBUG_RNG       1
+#define MCX_DEBUG_RNG       1                   /**< MCX debug flags */
 #define MCX_DEBUG_MOVE      2
 #define MCX_DEBUG_PROGRESS  4
 
-#define ROULETTE_SIZE       10.f
+#define ROULETTE_SIZE       10.f                /**< Russian Roulette size */
 
 #ifdef  MCX_DEBUG
 #define GPUDEBUG(x)        printf x             /**< enable debugging in CPU mode */
@@ -55,7 +57,7 @@ typedef struct  __align__(16) MCXDir{
 }MCXdir;
 
 typedef struct  __align__(16) MCXTimer{
-        float pscat; /**< remaining scattering probability, unit-less*/
+        float pscat; /**< remaining unit-less scattering length = length * scattering coeff */
         float t;     /**< photon elapse time, unit=s*/
 	float tnext; /**< time for the next accumulation,unit=s*/
 	float ndone; /**< number of completed photons*/
@@ -86,6 +88,12 @@ typedef union  __align__(16) GProperty{
 }Gprop;
 
 typedef unsigned char uchar;
+
+/**
+ * @brief Simulation constant parameters stored in the constant memory
+ *
+ * This struct stores all constants used in the simulation.
+ */
 
 typedef struct  __align__(16) KernelParams {
   float3 vsize;
