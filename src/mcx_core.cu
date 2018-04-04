@@ -722,6 +722,19 @@ __device__ inline int launchnewphoton(MCXpos *p,MCXdir *v,MCXtime *f,float3* rv,
                       *rv=float3(rv->x+(gcfg->srcparam1.x+gcfg->srcparam2.x)*0.5f,
 		                 rv->y+(gcfg->srcparam1.y+gcfg->srcparam2.y)*0.5f,
 				 rv->z+(gcfg->srcparam1.z+gcfg->srcparam2.z)*0.5f);
+
+          // Uniform point picking on a sphere 
+          // http://mathworld.wolfram.com/SpherePointPicking.html
+          float ang,stheta,ctheta,sphi,cphi;
+          ang=TWO_PI*rand_uniform01(t); //next arimuth angle
+          sincosf(ang,&sphi,&cphi);
+          do {
+              ang=(0.0524>0) ? TWO_PI*rand_uniform01(t) : acosf(2.f*rand_uniform01(t)-1.f); //sine distribution
+          } while(ang>0.0524);
+
+          sincosf(ang,&stheta,&ctheta);
+          rotatevector(v,stheta,ctheta,sphi,cphi);
+          //             *Lmove=0.f;
 		      break;
 		}
 		case(MCX_SRC_FOURIERX):
