@@ -105,9 +105,14 @@ OUTPUTFLAG:=-o
 logfast:    CUCCOPT+=-use_fast_math
 xor:        CUCCOPT+=-DUSE_XORSHIFT128P_RAND
 xor:        LINKOPT+=-DUSE_XORSHIFT128P_RAND
+xoro:       CUCCOPT+=-DUSE_XOROSHIRO128P_RAND
+xoro:       LINKOPT+=-DUSE_XOROSHIRO128P_RAND
+posix:      CUCCOPT+=-DUSE_POSIX_RAND
+posix:      LINKOPT+=-DUSE_POSIX_RAND
 fast:       CUCCOPT+=-DUSE_XORSHIFT128P_RAND -use_fast_math
 log:        CUCCOPT+=
 debugxor:   xor
+debugxor:   LINKOPT+=$(OMP)
 debuglog:   CUCCOPT+=
 racing:     CUCCOPT+=-DTEST_RACING
 xoratomic:  CUCCOPT+=-DUSE_XORSHIFT128P_RAND -DUSE_ATOMIC -use_fast_math $(CUGENCODE) MCX_TARGET_NAME='"Xorshift128+ Atomic MCX"'
@@ -177,7 +182,7 @@ doc: makedocdir
 
 OBJS      := $(addsuffix $(OBJSUFFIX), $(FILES))
 
-all xor fast log logfast racing xoratomic logatomic xorbox logbox debugxor debuglog \
+all xor xoro posix fast log logfast racing xoratomic logatomic xorbox logbox debugxor debuglog \
  det detbox fermi mex oct mexbox octbox fermimex fermioct: cudasdk $(OUTPUT_DIR)/$(BINARY)
 
 makedirs:
