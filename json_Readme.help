@@ -1,0 +1,72 @@
+{
+    "Domain": {
+                "VolumeFile": "path_to_volume_file" <Cannot be used with Shapes keyword>,
+                "Dim":    [60,60,60] <Number of voxels in x,y,z>,
+                "Step": [1,1,1] <Step size of each voxels>
+                "OriginType": 1 <Sets the cfg->issrcfrom0 variable basically translates the domain from matlab to c or vice versa>,
+                "LengthUnit": 1 <This is a factor which is multiplied to mus and mua>,
+                "Media": [
+                             {"mua": 0.00, "mus": 0.0, "g": 1.00, "n": 1.0},
+                             {"mua": 0.005,"mus": 1.0, "g": 0.01, "n": 1.0}
+                         ] <Specify an array of media in the computational domain, first one is always air>
+    },
+
+    "Optode": {
+                "Source": {
+                    "Pos": [29.0, 29.0, 0.0] <Position in the computational domain>,
+                    "Dir": [0.0, 0.0, 1.0] <Unit vector for the source direction>,
+                    "Type": "pencil" <  Type of source: "pencil","isotropic",\
+                                        "cone","gaussian","planar", "pattern","fourier","arcsine","disk",\
+                                        "fourierx","fourierx2d","zgaussian","line","slit" >
+                                    ,
+                    "Param1": [0.0, 0.0, 0.0, 0.0] <Sets the source Param1>,
+                    "Param2": [0.0, 0.0, 0.0, 0.0] <Sets the source Param2>,
+                    "Pattern": {
+                        "Nx"    : 60,
+                        "Ny"    : 60,
+                        "Nz"    : 60,
+                        "Data"  : 0.5 <This refers to the intensity. Need to confirm if this is the correct input. Think it needs to be an array like Detector>
+                    }
+                },
+                "Detector": [
+                        {
+                            "Pos": [29.0,  19.0,  0.0],
+                            "R": 1.0
+                        },
+                        {
+                            "Pos": [29.0,  39.0,  0.0],
+                            "R": 1.0
+                        },
+                        {
+                            "Pos": [19.0,  29.0,  0.0],
+                            "R": 1.0
+                        },
+                        {
+                            "Pos": [39.0,  29.0,  0.0],
+                            "R": 1.0
+                        }
+                ]
+    }
+
+    "Session": {
+                "Photons":  1000000,
+                "RNGSeed":  29012392,
+                "ID":       "qtest",
+                "DoMismatch" : 0 <Sets the cfg->isreflect variable>,
+                "DoSaveVolume" : 0 <Sets the cfg->issave2pt variable>,
+                "DoNormalize" : 1 <Sets the cfg->isnormalized variable>,
+                "DoPartialPath" : 0     <cfg->issavedet>
+                "DoSaveExit"    : 0 <cfg->issaveexit>
+                "DoSaveSeed"   : 0  <cfg->issaveseed>
+                "ReseedLimit" : 0 <cfg->reseedlimit>
+                "OutputFormat" : "mc2" <The output format for the simulation>
+    },
+
+    "Forward": {
+                "T0": 0.0e+00,
+                "T1": 5.0e-09,
+                "Dt": 5.0e-09
+    },
+
+    "Shapes" : <Cannot be used with Domain::VolumeFile>
+ }
