@@ -38,6 +38,7 @@ extern "C" {
 #define MCX_DEBUG_RNG       1                   /**< MCX debug flags */
 #define MCX_DEBUG_MOVE      2
 #define MCX_DEBUG_PROGRESS  4
+#define MAX_ACCUM           1000.f
 
 #define ROULETTE_SIZE       10.f                /**< Russian Roulette size */
 
@@ -110,7 +111,7 @@ typedef struct  __align__(16) KernelParams {
   float4 ps;                         /**< initial position vector, for pencil beam */
   float4 c0;                         /**< initial directon vector, for pencil beam */
   float3 maxidx;                     /**< maximum index in x/y/z directions for out-of-bound tests */
-  uint3  dimlen;                     /**< maximum index used to convert x/y/z to 1D array index */
+  uint4  dimlen;                     /**< maximum index used to convert x/y/z to 1D array index */
   uint3  cp0;                        /**< 3D coordinates of one diagonal of the cached region  (obsolete) */
   uint3  cp1;                        /**< 3D coordinates of the other diagonal of the cached region  (obsolete) */
   uint2  cachebox;                   /**< stride for cachebox data acess  (obsolete) */
@@ -133,6 +134,8 @@ typedef struct  __align__(16) KernelParams {
   unsigned int issaveseed;           /**< flag if one need to save the detected photon seeds for replay */
   unsigned int issaveexit;           /**< flag if one need to save the detected photon positions and dir vectors */
   unsigned int issaveref;            /**< flag if one need to save diffuse reflectance data in the 0-voxel layer next to the boundary */
+  unsigned int ismomentum;           /**< 1 to save momentum transfer for detected photons, implies issavedet=1*/
+  unsigned int isspecular;           /**< 0 do not perform specular reflection at launch, 1 do specular reflection */
   unsigned int seedoffset;           /**< offset of the seed, not used */
   int seed;                          /**< RNG seed passted from the host */
   unsigned int outputtype;           /**< Type of output to be accummulated */
@@ -143,6 +146,7 @@ typedef struct  __align__(16) KernelParams {
   unsigned int maxjumpdebug;         /**< max number of positions to be saved to save photon trajectory when -D M is used */
   unsigned int gscatter;             /**< how many scattering events after which mus/g can be approximated by mus' */
   unsigned int is2d;                 /**< is the domain a 2D slice? */
+  int replaydet;                     /**< select which detector to replay, 0 for all, -1 save all separately */
   uchar  phaseFile;
 }MCXParam;
 

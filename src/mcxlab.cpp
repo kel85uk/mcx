@@ -97,7 +97,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]){
   mxArray    *tmp;
   int        ifield, jstruct;
   int        ncfg, nfields;
-  dimtype    fielddim[4];
+  dimtype    fielddim[5];
   int        activedev=0;
   int        errorflag=0;
   int        threadid=0;
@@ -221,10 +221,12 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]){
 	/** Initialize all buffers necessary to store the output variables */
 	if(nlhs>=1){
             int fieldlen=cfg.dim.x*cfg.dim.y*cfg.dim.z*(int)((cfg.tend-cfg.tstart)/cfg.tstep+0.5);
+	    if(cfg.replay.seed!=NULL && cfg.replaydet==-1)
+	        fieldlen*=cfg.detnum;
 	    cfg.exportfield = (float*)calloc(fieldlen,sizeof(float));
 	}
 	if(nlhs>=2){
-	    cfg.exportdetected=(float*)malloc((cfg.medianum+1+cfg.issaveexit*6)*cfg.maxdetphoton*sizeof(float));
+	    cfg.exportdetected=(float*)malloc((cfg.medianum+1+cfg.issaveexit*6+(cfg.ismomentum>0)*(cfg.medianum-1))*cfg.maxdetphoton*sizeof(float));
         }
         if(nlhs>=4){
 	    cfg.seeddata=malloc(cfg.maxdetphoton*sizeof(float)*RAND_WORD_LEN);
@@ -265,6 +267,8 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]){
         if(errorflag)
             mexErrMsgTxt("MCXLAB Terminated due to an exception!");
 
+        fielddim[4]=1;
+
         /** if 5th output presents, output the photon trajectory data */
         if(nlhs>=5){
             fielddim[0]=MCX_DEBUG_REC_LEN; fielddim[1]=cfg.debugdatalen; // his.savedphoton is for one repetition, should correct
@@ -297,7 +301,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]){
 	}
 	/** if the 2nd output presents, output the detected photon partialpath data */
 	if(nlhs>=2){
-            fielddim[0]=(cfg.medianum+1+cfg.issaveexit*6); fielddim[1]=cfg.detectedcount; 
+            fielddim[0]=(cfg.medianum+1+cfg.issaveexit*6+(cfg.ismomentum>0)*(cfg.medianum-1)); fielddim[1]=cfg.detectedcount; 
             fielddim[2]=0; fielddim[3]=0;
             if(cfg.detectedcount>0){
                     mxSetFieldByNumber(plhs[1],jstruct,0, mxCreateNumericArray(2,fielddim,mxSINGLE_CLASS,mxREAL));
@@ -312,7 +316,9 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]){
 	    int fieldlen;
             fielddim[0]=cfg.dim.x; fielddim[1]=cfg.dim.y; 
 	    fielddim[2]=cfg.dim.z; fielddim[3]=(int)((cfg.tend-cfg.tstart)/cfg.tstep+0.5);
-	    fieldlen=fielddim[0]*fielddim[1]*fielddim[2]*fielddim[3];
+	    if(cfg.replay.seed!=NULL && cfg.replaydet==-1)
+	        fielddim[4]=cfg.detnum;
+	    fieldlen=fielddim[0]*fielddim[1]*fielddim[2]*fielddim[3]*fielddim[4];
             if(cfg.issaveref){        /** If error is detected, gracefully terminate the mex and return back to MATLAB */
 
 	        float *dref=(float *)malloc(fieldlen*sizeof(float));
@@ -324,11 +330,11 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]){
 		    }else
 		        dref[i]=0.f;
 		}
-	        mxSetFieldByNumber(plhs[0],jstruct,2, mxCreateNumericArray(4,fielddim,mxSINGLE_CLASS,mxREAL));
+	        mxSetFieldByNumber(plhs[0],jstruct,2, mxCreateNumericArray(4+(fielddim[4]>1),fielddim,mxSINGLE_CLASS,mxREAL));
                 memcpy((float*)mxGetPr(mxGetFieldByNumber(plhs[0],jstruct,2)),dref,fieldlen*sizeof(float));
 		free(dref);
 	    }
-	    mxSetFieldByNumber(plhs[0],jstruct,0, mxCreateNumericArray(4,fielddim,mxSINGLE_CLASS,mxREAL));
+	    mxSetFieldByNumber(plhs[0],jstruct,0, mxCreateNumericArray(4+(fielddim[4]>1),fielddim,mxSINGLE_CLASS,mxREAL));
 	    memcpy((float*)mxGetPr(mxGetFieldByNumber(plhs[0],jstruct,0)),cfg.exportfield,
                          fieldlen*sizeof(float));
             free(cfg.exportfield);
@@ -342,7 +348,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]){
 
             /** return the total simulated photon number */
             val = mxCreateDoubleMatrix(1,1,mxREAL);
-            *mxGetPr(val) = cfg.nphoton;
+            *mxGetPr(val) = cfg.nphoton*((cfg.respin>1) ? (cfg.respin) : 1);
             mxSetFieldByNumber(stat,0,1, val);
 
             /** return the total simulated energy */
@@ -432,6 +438,8 @@ void mcx_set_field(const mxArray *root,const mxArray *item,int idx, Config *cfg)
     GET_ONE_FIELD(cfg,issaveseed)
     GET_ONE_FIELD(cfg,issaveref)
     GET_ONE_FIELD(cfg,issaveexit)
+    GET_ONE_FIELD(cfg,ismomentum)
+    GET_ONE_FIELD(cfg,isspecular)
     GET_ONE_FIELD(cfg,replaydet)
     GET_ONE_FIELD(cfg,faststep)
     GET_ONE_FIELD(cfg,maxvoidstep)
@@ -617,7 +625,7 @@ void mcx_set_field(const mxArray *root,const mxArray *item,int idx, Config *cfg)
             memcpy(cfg->replay.seed,mxGetData(item),arraydim[0]*arraydim[1]);
             cfg->seed=SEED_FROM_FILE;
             cfg->nphoton=arraydim[1];
-            printf("mcx.nphoton=%d;\n",cfg->nphoton);
+            printf("mcx.nphoton=%ld;\n",cfg->nphoton);
         }
     }else if(strcmp(name,"gpuid")==0){
         int len=mxGetNumberOfElements(item);
@@ -690,14 +698,16 @@ void mcx_replay_prep(Config *cfg){
 
     cfg->replay.weight=(float*)malloc(cfg->nphoton*sizeof(float));
     cfg->replay.tof=(float*)calloc(cfg->nphoton,sizeof(float));
+    cfg->replay.detid=(int*)calloc(cfg->nphoton,sizeof(int));
 
     cfg->nphoton=0;
-    for(i=0;i<dimdetps[1];i++)
-        if(cfg->replaydet==0 || cfg->replaydet==(int)(detps[i*dimdetps[0]])){
+    for(i=0;i<dimdetps[1];i++){
+        if(cfg->replaydet<=0 || cfg->replaydet==(int)(detps[i*dimdetps[0]])){
             if(i!=cfg->nphoton)
                 memcpy((char *)(cfg->replay.seed)+cfg->nphoton*seedbyte, (char *)(cfg->replay.seed)+i*seedbyte, seedbyte);
             cfg->replay.weight[cfg->nphoton]=1.f;
 	    cfg->replay.tof[cfg->nphoton]=0.f;
+            cfg->replay.detid[cfg->nphoton]=(int)(detps[i*dimdetps[0]]);
             for(j=2;j<cfg->medianum+1;j++){
                 cfg->replay.weight[cfg->nphoton]*=expf(-cfg->prop[j-1].mua*detps[i*dimdetps[0]+j]*cfg->unitinmm);
                 cfg->replay.tof[cfg->nphoton]+=detps[i*dimdetps[0]+j]*cfg->unitinmm*R_C0*cfg->prop[j-1].n;
@@ -706,6 +716,10 @@ void mcx_replay_prep(Config *cfg){
                 continue;
             cfg->nphoton++;
         }
+    }
+    cfg->replay.weight=(float*)realloc(cfg->replay.weight, cfg->nphoton*sizeof(float));
+    cfg->replay.tof=(float*)realloc(cfg->replay.tof, cfg->nphoton*sizeof(float));
+    cfg->replay.detid=(int*)realloc(cfg->replay.detid, cfg->nphoton*sizeof(int));
 }
 
 /** 
@@ -762,6 +776,11 @@ void mcx_validate_config(Config *cfg){
      if(cfg->steps.x!=1.f && cfg->unitinmm==1.f)
         cfg->unitinmm=cfg->steps.x;
 
+     if(cfg->replaydet>(int)cfg->detnum)
+        mexErrMsgTxt("replay detector ID exceeds the maximum detector number");
+     if(cfg->replaydet==-1 && cfg->detnum==1)
+        cfg->replaydet=1;
+
      if(cfg->medianum){
         for(int i=0;i<cfg->medianum;i++)
              if(cfg->prop[i].mus==0.f)
@@ -776,8 +795,13 @@ void mcx_validate_config(Config *cfg){
      }
      if(cfg->issavedet && cfg->detnum==0) 
       	cfg->issavedet=0;
-     if(cfg->issavedet==0)
+     if(cfg->issavedet==0){
          cfg->issaveexit=0;
+	 cfg->ismomentum=0;
+     }
+     if(cfg->respin==0)
+         mexErrMsgTxt("respin number can not be 0, check your -r/--repeat input or cfg.respin value");
+
      if(cfg->seed<0 && cfg->seed!=SEED_FROM_FILE) cfg->seed=time(NULL);
      if((cfg->outputtype==otJacobian || cfg->outputtype==otWP) && cfg->seed!=SEED_FROM_FILE)
          mexErrMsgTxt("Jacobian output is only valid in the reply mode. Please define cfg.seed");     
@@ -796,7 +820,7 @@ void mcx_validate_config(Config *cfg){
 	if(cfg->issavedet)
 		mcx_maskdet(cfg);
         if(cfg->seed==SEED_FROM_FILE){
-            if(cfg->respin>1){
+            if(cfg->respin>1 || cfg->respin<0){
 	       cfg->respin=1;
 	       fprintf(stderr,"Warning: respin is disabled in the replay mode\n");
 	    }
@@ -804,7 +828,7 @@ void mcx_validate_config(Config *cfg){
      }
      cfg->his.maxmedia=cfg->medianum-1; /*skip medium 0*/
      cfg->his.detnum=cfg->detnum;
-     cfg->his.colcount=cfg->medianum+1+cfg->issaveexit*6; /*column count=maxmedia+2*/
+     cfg->his.colcount=cfg->medianum+1+cfg->issaveexit*6+(cfg->ismomentum>0)*(cfg->medianum-1); /*column count=maxmedia+2*/
      mcx_replay_prep(cfg);
 }
 

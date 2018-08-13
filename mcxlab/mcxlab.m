@@ -24,6 +24,8 @@ function varargout=mcxlab(varargin)
 %
 %== Required ==
 %     *cfg.nphoton:    the total number of photons to be simulated (integer)
+%                      maximum supported value is 2^31=2.1e9, if simulating more
+%                      photons is needed, please set cfg.respin to make multiple runs
 %     *cfg.vol:        a 3D array specifying the media index in the domain
 %     *cfg.prop:       an N by 4 array, each row specifies [mua, mus, g, n] in order.
 %                      the first row corresponds to medium type 0 which is 
@@ -42,9 +44,11 @@ function varargout=mcxlab(varargin)
 %                      if set to a uint8 array, the binary data in each column is used 
 %                      to seed a photon (i.e. the "replay" mode)
 %      cfg.respin:     repeat simulation for the given time (integer) [1]
+%                      if negative, divide the total photon number into respin subsets
 %      cfg.isreflect:  [1]-consider refractive index mismatch, 0-matched index
 %      cfg.isrefint:   1-ref. index mismatch at inner boundaries, [0]-matched index
 %      cfg.isnormalized:[1]-normalize the output fluence to unitary source, 0-no reflection
+%      cfg.isspecular: 1-calculate specular reflection if source is outside, [0] no specular reflection
 %      cfg.maxgate:    the num of time-gates per simulation
 %      cfg.minenergy:  terminate photon when weight less than this level (float) [0.0]
 %      cfg.unitinmm:   defines the length unit for a grid edge length [1.0]
@@ -123,6 +127,10 @@ function varargout=mcxlab(varargin)
 %      cfg.{srcparam1,srcparam2}: 1x4 vectors, see cfg.srctype for details
 %      cfg.srcpattern: see cfg.srctype for details
 %      cfg.issrcfrom0: 1-first voxel is [0 0 0], [0]- first voxel is [1 1 1]
+%      cfg.replaydet:  only works when cfg.outputtype is 'jacobian', 'wl', 'nscat', or 'wp' and cfg.seed is an array
+%                      -1 replay all detectors and save in separate volumes (output has 5 dimensions)
+%                       0 replay all detectors and sum all Jacobians into one volume
+%                       a positive number: the index of the detector to replay and obtain Jacobians
 %      cfg.voidtime:   for wide-field sources, [1]-start timer at launch, or 0-when entering 
 %                      the first non-zero voxel
 %
@@ -162,6 +170,7 @@ function varargout=mcxlab(varargin)
 %              detphoton.ppath: cummulative path lengths in each medium (partial pathlength)
 %                   one need to multiply cfg.unitinmm with ppath to convert it to mm.
 %              detphoton.p or .v: exit position and direction, when cfg.issaveexit=1
+%              detphoton.prop: optical properties, a copy of cfg.prop
 %              detphoton.data: a concatenated and transposed array in the order of
 %                    [detid nscat ppath p v]'
 %              "data" is the is the only subfield in all MCXLAB before 2018
@@ -250,13 +259,17 @@ if(nargout>=2)
                 continue;
             end
             newdetp.detid=int32(detp(1,:))';
-            newdetp.nscat=int32(detp(2,:))';    % 1st medianum block is num of scattering
+            newdetp.nscat=int32(detp(2,:))';    % 2nd column is the total num of scattering
             newdetp.ppath=detp(3:2+medianum,:)';% 2nd medianum block is partial path
+            if(isfield(cfg(i),'ismomentum') && cfg(i).ismomentum)
+                newdetp.mom=detp(medianum+3:2*medianum+2,:)'; % 3rd medianum block is the momentum transfer
+            end
             if(isfield(cfg(i),'issaveexit') && cfg(i).issaveexit)
-                newdetp.p=detp(end-5:end-3,:)';             %columns 7-5 from the right store the exit positions*/
+                newdetp.p=detp(end-5:end-3,:)';      %columns 7-5 from the right store the exit positions*/
                 newdetp.v=detp(end-2:end,:)';	     %columns 4-2 from the right store the exit dirs*/
             end
             % newdetp.w0=detp(end,:)';  % last column is the initial packet weight
+            newdetp.prop=cfg(i).prop;
             newdetp.data=detp;      % enable this line for compatibility
             newdetpstruct(i)=newdetp;
         else
